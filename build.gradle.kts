@@ -1,29 +1,21 @@
 plugins {
-    id("com.android.library") version "8.9.1"
+    id("com.android.library") version "8.13.2"
     `maven-publish`
 }
-
-val tools = mapOf(
-    "minSdk" to 21,
-    "targetSdk" to 36,
-    "compileSdk" to 36,
-    "versionCode" to 5,
-    "versionName" to "1.9.7"
-)
 
 group = "com.github.mystic"
 
 android {
     namespace = "com.shockwave.pdfium"
-    compileSdk = tools["compileSdk"] as Int
+    compileSdk { version = release(36) }
     
     defaultConfig {
-        minSdk = tools["minSdk"] as Int
-        targetSdk = tools["targetSdk"] as Int
-        versionCode = tools["versionCode"] as Int
-        versionName = tools["versionName"] as String
-        
-        buildConfigField("String", "VERSION_NAME", "\"${versionName}\"")
+        minSdk = 23
+        // versionCode and versionName are not supported in library modules
+        // They are only used in application modules
+
+        buildConfigField("String", "VERSION_NAME", "\"1.9.7\"")
+
         
         externalNativeBuild {
             cmake {
@@ -31,7 +23,16 @@ android {
             }
         }
     }
+
+    // Configure targetSdk for testing and lint (deprecated in defaultConfig for libraries)
+    testOptions {
+        targetSdk = 36
+    }
     
+    lint {
+        targetSdk = 36
+    }
+
     buildFeatures {
         buildConfig = true
     }
