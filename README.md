@@ -2,6 +2,12 @@ The purpose is to remove old support libraries so we no longer need to use jetif
 
 It will be used with the forked [AndroidPdFViewer](https://github.com/realmystic/AndroidPdfViewer)
 
+## What's new in 1.9.8
+* Migrate to .KTS format for gradle
+* Update Proguard rules to use optimized rules for android
+* Bump minSdk to 23 to align with Android's current supported minSdk
+* Bump AGP to 8.13.2 & Appcompat to 1.7.1
+
 ## What's new in 1.9.7
 * Add 16KB Page size support for Android 15+
 * Bump compile & target SDK to 36

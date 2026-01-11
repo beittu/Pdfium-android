@@ -14,7 +14,7 @@ android {
         // versionCode and versionName are not supported in library modules
         // They are only used in application modules
 
-        buildConfigField("String", "VERSION_NAME", "\"1.9.7\"")
+        buildConfigField("String", "VERSION_NAME", "\"1.9.8\"")
 
         
         externalNativeBuild {
@@ -84,7 +84,7 @@ publishing {
         create<MavenPublication>("release") {
             groupId = "com.github.realmystic"
             artifactId = "PdfiumAndroid"
-            version = "1.9.7"
+            version = "1.9.8"
             
             afterEvaluate {
                 from(components["release"])
