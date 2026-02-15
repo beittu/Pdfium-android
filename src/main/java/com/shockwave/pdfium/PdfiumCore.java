@@ -472,12 +472,12 @@ public class PdfiumCore {
     // Metodi pubblici per operazioni su testo
     
     /**
-     * Apre una pagina di testo per un documento PDF.
-     * Ricordati di chiudere la pagina quando hai finito usando {@link #closeTextPage(long)}.
+     * Opens a text page for a PDF document.
+     * Remember to close the page when finished using {@link PdfTextPage#close()}.
      * 
-     * @param doc Il documento PDF
-     * @param pageIndex L'indice della pagina (0-based)
-     * @return Un oggetto PdfTextPage
+     * @param doc The PDF document
+     * @param pageIndex The page index (0-based)
+     * @return A PdfTextPage object
      */
     public PdfTextPage openTextPage(PdfDocument doc, int pageIndex) {
         synchronized (lock) {

@@ -1,7 +1,7 @@
 package com.shockwave.pdfium;
 
 /**
- * Rappresenta una corrispondenza di ricerca nel testo di un PDF.
+ * Represents a search match in PDF text.
  */
 public class PdfTextSearchMatch {
     private final int startIndex;
@@ -13,14 +13,14 @@ public class PdfTextSearchMatch {
     }
 
     /**
-     * @return L'indice iniziale (0-based) della corrispondenza nel testo della pagina
+     * @return The starting index (0-based) of the match in the page text
      */
     public int getStartIndex() {
         return startIndex;
     }
 
     /**
-     * @return Il numero di caratteri nella corrispondenza
+     * @return The number of characters in the match
      */
     public int getCount() {
         return count;
