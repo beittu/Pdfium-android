@@ -204,3 +204,269 @@ All native calls are synchronized through the `PdfiumCore` lock, making the API 
 ## Credits
 
 This implementation was adapted from [KotlinPdfium](https://github.com/HyntixHQ/KotlinPdfium) which provides similar functionality for Kotlin-based projects.
+
+## Text Selection
+
+The library supports interactive text selection, allowing users to select text between two points on a PDF page. This is particularly useful for implementing touch-based text selection in PDF viewers.
+
+### Overview
+
+Text selection works by:
+1. Converting device/screen coordinates to PDF page coordinates
+2. Finding character indices at the tap-down and tap-up positions
+3. Extracting the text between these indices
+4. Retrieving bounding rectangles for highlighting
+
+### Coordinate Conversion
+
+Before performing text selection, you need to convert device (screen) coordinates to PDF page coordinates:
+
+```java
+PdfiumCore pdfiumCore = new PdfiumCore(context);
+PdfDocument doc = pdfiumCore.newDocument(fd);
+
+// Open the page
+pdfiumCore.openPage(doc, pageIndex);
+
+// Convert device coordinates to page coordinates
+// These parameters depend on how the PDF is rendered in your view
+int startX = 0;           // Left pixel position of the display area
+int startY = 0;           // Top pixel position of the display area
+int sizeX = viewWidth;    // Horizontal size in pixels
+int sizeY = viewHeight;   // Vertical size in pixels
+int rotate = 0;           // Page rotation (0, 1, 2, or 3)
+
+// Convert tap-down point
+double[] pageCoords1 = pdfiumCore.mapDeviceToPageCoords(
+    doc, pageIndex, startX, startY, sizeX, sizeY, rotate, 
+    deviceX1, deviceY1
+);
+
+// Convert tap-up point
+double[] pageCoords2 = pdfiumCore.mapDeviceToPageCoords(
+    doc, pageIndex, startX, startY, sizeX, sizeY, rotate, 
+    deviceX2, deviceY2
+);
+```
+
+### Selecting Text
+
+Once you have page coordinates, you can select text:
+
+```java
+PdfTextPage textPage = pdfiumCore.openTextPage(doc, pageIndex);
+try {
+    // Select text between two points using default tolerances
+    PdfTextSelection selection = textPage.selectText(
+        pageCoords1[0], pageCoords1[1],  // First point (x1, y1)
+        pageCoords2[0], pageCoords2[1]   // Second point (x2, y2)
+    );
+    
+    // Or specify custom tolerances for character detection
+    PdfTextSelection selection = textPage.selectText(
+        pageCoords1[0], pageCoords1[1],
+        pageCoords2[0], pageCoords2[1],
+        10.0,  // xTolerance
+        10.0   // yTolerance
+    );
+    
+    if (selection != null) {
+        // Selection was successful
+        String selectedText = selection.getText();
+        int startIndex = selection.getStartIndex();
+        int charCount = selection.getCount();
+        List<RectF> highlightRects = selection.getRects();
+        
+        // Use the selected text (e.g., copy to clipboard)
+        ClipboardManager clipboard = (ClipboardManager) 
+            context.getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("PDF Text", selectedText);
+        clipboard.setPrimaryClip(clip);
+        
+        // Draw highlights on the canvas
+        for (RectF rect : highlightRects) {
+            canvas.drawRect(rect, highlightPaint);
+        }
+    } else {
+        // No text was selected (no characters found at the given points)
+        Log.d("PDF", "No text selected");
+    }
+} finally {
+    textPage.close();
+}
+```
+
+### Complete Text Selection Example
+
+Here's a complete example of implementing text selection in a custom view:
+
+```java
+public class PdfPageView extends View {
+    private PdfiumCore pdfiumCore;
+    private PdfDocument pdfDocument;
+    private int pageIndex;
+    private PdfTextSelection currentSelection;
+    
+    private float touchDownX, touchDownY;
+    private float touchUpX, touchUpY;
+    
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                touchDownX = event.getX();
+                touchDownY = event.getY();
+                return true;
+                
+            case MotionEvent.ACTION_UP:
+                touchUpX = event.getX();
+                touchUpY = event.getY();
+                performTextSelection();
+                return true;
+        }
+        return super.onTouchEvent(event);
+    }
+    
+    private void performTextSelection() {
+        // Get view dimensions
+        int viewWidth = getWidth();
+        int viewHeight = getHeight();
+        
+        // Convert device coordinates to page coordinates
+        double[] pageCoords1 = pdfiumCore.mapDeviceToPageCoords(
+            pdfDocument, pageIndex, 
+            0, 0, viewWidth, viewHeight, 0,
+            (int) touchDownX, (int) touchDownY
+        );
+        
+        double[] pageCoords2 = pdfiumCore.mapDeviceToPageCoords(
+            pdfDocument, pageIndex, 
+            0, 0, viewWidth, viewHeight, 0,
+            (int) touchUpX, (int) touchUpY
+        );
+        
+        // Open text page and perform selection
+        PdfTextPage textPage = pdfiumCore.openTextPage(pdfDocument, pageIndex);
+        try {
+            currentSelection = textPage.selectText(
+                pageCoords1[0], pageCoords1[1],
+                pageCoords2[0], pageCoords2[1]
+            );
+            
+            if (currentSelection != null) {
+                Log.d("PDF", "Selected text: " + currentSelection.getText());
+                
+                // Copy to clipboard
+                ClipboardManager clipboard = (ClipboardManager) 
+                    getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("PDF", currentSelection.getText());
+                clipboard.setPrimaryClip(clip);
+                
+                // Trigger redraw to show highlights
+                invalidate();
+                
+                // Show a toast or snackbar
+                Toast.makeText(getContext(), 
+                    "Text copied: " + currentSelection.getText().substring(0, 
+                        Math.min(20, currentSelection.getText().length())),
+                    Toast.LENGTH_SHORT).show();
+            }
+        } finally {
+            textPage.close();
+        }
+    }
+    
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        
+        // Draw PDF page...
+        
+        // Draw text selection highlights
+        if (currentSelection != null) {
+            Paint highlightPaint = new Paint();
+            highlightPaint.setColor(Color.argb(100, 255, 255, 0)); // Semi-transparent yellow
+            highlightPaint.setStyle(Paint.Style.FILL);
+            
+            for (RectF rect : currentSelection.getRects()) {
+                // Convert page coordinates back to device coordinates for drawing
+                Point topLeft = pdfiumCore.mapPageCoordsToDevice(
+                    pdfDocument, pageIndex, 0, 0, getWidth(), getHeight(), 0,
+                    rect.left, rect.top
+                );
+                Point bottomRight = pdfiumCore.mapPageCoordsToDevice(
+                    pdfDocument, pageIndex, 0, 0, getWidth(), getHeight(), 0,
+                    rect.right, rect.bottom
+                );
+                
+                canvas.drawRect(
+                    topLeft.x, topLeft.y,
+                    bottomRight.x, bottomRight.y,
+                    highlightPaint
+                );
+            }
+        }
+    }
+}
+```
+
+### Tolerance Values
+
+The tolerance parameters control how close a coordinate must be to a character for it to be detected:
+
+- **xTolerance**: Horizontal tolerance in PDF points (1/72 inch)
+- **yTolerance**: Vertical tolerance in PDF points (1/72 inch)
+
+Default values are 10.0 for both, matching KotlinPdfium behavior. Larger values make character detection more lenient, smaller values make it more precise.
+
+### Handling Edge Cases
+
+```java
+PdfTextSelection selection = textPage.selectText(x1, y1, x2, y2);
+
+if (selection == null) {
+    // No characters found at one or both points
+    // This can happen if:
+    // - The user tapped on empty space
+    // - The tolerance values are too small
+    // - The coordinates are outside the page bounds
+    Log.d("PDF", "No text at the selected positions");
+} else if (selection.getCount() == 0) {
+    // Selection has zero characters (shouldn't happen with current implementation)
+    Log.d("PDF", "Empty selection");
+} else {
+    // Valid selection
+    Log.d("PDF", "Selected " + selection.getCount() + " characters");
+}
+```
+
+### API Reference
+
+#### PdfTextSelection
+
+A value object containing text selection data:
+
+- `int getStartIndex()` - Starting character index (0-based)
+- `int getCount()` - Number of characters selected
+- `String getText()` - The selected text
+- `List<RectF> getRects()` - Bounding rectangles for highlighting (may be multiple for multi-line selections)
+
+#### PdfTextPage Methods
+
+- `PdfTextSelection selectText(double x1, double y1, double x2, double y2)` - Select text with default tolerances (10.0, 10.0)
+- `PdfTextSelection selectText(double x1, double y1, double x2, double y2, double xTolerance, double yTolerance)` - Select text with custom tolerances
+
+Both methods return `null` if no character is found at one or both points.
+
+### Performance Notes
+
+1. **Coordinate Conversion**: Coordinate conversion is relatively lightweight and can be done on the UI thread for touch events.
+
+2. **Text Selection**: The `selectText` method performs several operations:
+   - Finding character indices (2 calls)
+   - Extracting text (1 call)
+   - Getting bounding rectangles (1 call)
+   
+   Consider performing text selection on a background thread for responsiveness, especially for large selections.
+
+3. **Resource Management**: Always close `PdfTextPage` after use to prevent native memory leaks.

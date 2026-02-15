@@ -146,6 +146,71 @@ public class PdfTextPage implements Closeable {
         return rects;
     }
 
+    /**
+     * Selects text between two points on the page.
+     * This method is useful for implementing text selection from touch/mouse events.
+     * 
+     * The coordinates should be in PDF page coordinate system. Use 
+     * {@link PdfiumCore#mapDeviceToPageCoords} to convert from device/screen coordinates.
+     * 
+     * @param x1 X coordinate of the first point (tap-down)
+     * @param y1 Y coordinate of the first point (tap-down)
+     * @param x2 X coordinate of the second point (tap-up)
+     * @param y2 Y coordinate of the second point (tap-up)
+     * @param xTolerance Horizontal tolerance for character detection
+     * @param yTolerance Vertical tolerance for character detection
+     * @return PdfTextSelection object containing the selection data, or null if no text is selected
+     */
+    public PdfTextSelection selectText(double x1, double y1, double x2, double y2, 
+                                       double xTolerance, double yTolerance) {
+        checkNotClosed();
+        
+        // Get character indices at both points
+        int index1 = getIndexAtPos(x1, y1, xTolerance, yTolerance);
+        int index2 = getIndexAtPos(x2, y2, xTolerance, yTolerance);
+        
+        // If no character found at either point, return null
+        if (index1 < 0 || index2 < 0) {
+            return null;
+        }
+        
+        // Normalize the order (ensure startIndex <= endIndex)
+        int startIndex = Math.min(index1, index2);
+        int endIndex = Math.max(index1, index2);
+        int count = endIndex - startIndex + 1;
+        
+        // If count is zero or negative, return null
+        if (count <= 0) {
+            return null;
+        }
+        
+        // Extract the text
+        String text = extractText(startIndex, count);
+        
+        // Get the bounding rectangles
+        List<RectF> rects = getTextRects(startIndex, count);
+        
+        return new PdfTextSelection(startIndex, count, text, rects);
+    }
+
+    /**
+     * Selects text between two points on the page using default tolerances.
+     * This is a convenience method that uses default tolerance values for character detection.
+     * 
+     * The coordinates should be in PDF page coordinate system. Use 
+     * {@link PdfiumCore#mapDeviceToPageCoords} to convert from device/screen coordinates.
+     * 
+     * @param x1 X coordinate of the first point (tap-down)
+     * @param y1 Y coordinate of the first point (tap-down)
+     * @param x2 X coordinate of the second point (tap-up)
+     * @param y2 Y coordinate of the second point (tap-up)
+     * @return PdfTextSelection object containing the selection data, or null if no text is selected
+     */
+    public PdfTextSelection selectText(double x1, double y1, double x2, double y2) {
+        // Use default tolerances matching KotlinPdfium behavior (10.0, 10.0)
+        return selectText(x1, y1, x2, y2, 10.0, 10.0);
+    }
+
     @Override
     public void close() {
         if (!isClosed) {
