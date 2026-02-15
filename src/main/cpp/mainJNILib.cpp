@@ -16,6 +16,7 @@ using namespace android;
 
 #include "include/fpdfview.h"
 #include "include/fpdf_doc.h"
+#include "include/fpdf_text.h"
 #include <string>
 #include <vector>
 #include <mutex>
@@ -687,6 +688,163 @@ JNI_FUNC(jobject, PdfiumCore, nativePageCoordsToDevice)(JNI_ARGS, jlong pagePtr,
     jclass clazz = env->FindClass("android/graphics/Point");
     jmethodID constructorID = env->GetMethodID(clazz, "<init>", "(II)V");
     return env->NewObject(clazz, constructorID, deviceX, deviceY);
+}
+
+// ==========================================
+// METODI JNI PER LA GESTIONE DEL TESTO
+// ==========================================
+
+JNI_FUNC(jlong, PdfiumCore, nativeLoadTextPage)(JNI_ARGS, jlong docPtr, jlong pagePtr) {
+    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    if (!page) return 0;
+    
+    FPDF_TEXTPAGE textPage = FPDFText_LoadPage(page);
+    return reinterpret_cast<jlong>(textPage);
+}
+
+JNI_FUNC(void, PdfiumCore, nativeCloseTextPage)(JNI_ARGS, jlong textPagePtr) {
+    FPDF_TEXTPAGE textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPagePtr);
+    if (textPage) {
+        FPDFText_ClosePage(textPage);
+    }
+}
+
+JNI_FUNC(jint, PdfiumCore, nativeTextCountChars)(JNI_ARGS, jlong textPagePtr) {
+    FPDF_TEXTPAGE textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPagePtr);
+    if (!textPage) return 0;
+    return FPDFText_CountChars(textPage);
+}
+
+JNI_FUNC(jstring, PdfiumCore, nativeGetText)(JNI_ARGS, jlong textPagePtr, 
+                                              jint startIndex, jint count) {
+    FPDF_TEXTPAGE textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPagePtr);
+    if (!textPage || count <= 0) return env->NewStringUTF("");
+    
+    // FPDFText_GetText ritorna il numero di caratteri incluso il terminatore null
+    int bufferSize = count + 1;
+    std::vector<unsigned short> buffer(bufferSize);
+    
+    int actualCount = FPDFText_GetText(textPage, startIndex, count, buffer.data());
+    if (actualCount <= 0) return env->NewStringUTF("");
+    
+    // Converti da UTF-16LE a jstring
+    const jchar* chars = reinterpret_cast<const jchar*>(buffer.data());
+    return env->NewString(chars, actualCount - 1); // -1 per escludere il null terminator
+}
+
+JNI_FUNC(void, PdfiumCore, nativeGetCharBox)(JNI_ARGS, jlong textPagePtr, 
+                                              jint index, jdoubleArray result) {
+    FPDF_TEXTPAGE textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPagePtr);
+    if (!textPage) return;
+    
+    double left, top, right, bottom;
+    if (FPDFText_GetCharBox(textPage, index, &left, &right, &bottom, &top)) {
+        jdouble rect[4] = {left, top, right, bottom};
+        env->SetDoubleArrayRegion(result, 0, 4, rect);
+    }
+}
+
+JNI_FUNC(jint, PdfiumCore, nativeGetCharIndexAtPos)(JNI_ARGS, jlong textPagePtr,
+                                                     jdouble x, jdouble y,
+                                                     jdouble xTolerance, jdouble yTolerance) {
+    FPDF_TEXTPAGE textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPagePtr);
+    if (!textPage) return -1;
+    return FPDFText_GetCharIndexAtPos(textPage, x, y, xTolerance, yTolerance);
+}
+
+// ==========================================
+// METODI JNI PER LA RICERCA DEL TESTO
+// ==========================================
+
+JNI_FUNC(jlong, PdfiumCore, nativeTextFindStart)(JNI_ARGS, jlong textPagePtr, 
+                                                  jstring query, jboolean matchCase, 
+                                                  jboolean matchWholeWord) {
+    FPDF_TEXTPAGE textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPagePtr);
+    if (!textPage) return 0;
+    
+    // Converti la query Java string in UTF-16LE per PDFium
+    jsize queryLen = env->GetStringLength(query);
+    const jchar *queryChars = env->GetStringChars(query, nullptr);
+    
+    if (!queryChars) return 0;
+    
+    // FPDF_WIDESTRING è unsigned short*
+    std::vector<unsigned short> wQuery(queryLen + 1);
+    for (int i = 0; i < queryLen; i++) {
+        wQuery[i] = static_cast<unsigned short>(queryChars[i]);
+    }
+    wQuery[queryLen] = 0;
+    
+    // Imposta i flag di ricerca
+    unsigned long flags = 0;
+    if (matchCase) flags |= FPDF_MATCHCASE;
+    if (matchWholeWord) flags |= FPDF_MATCHWHOLEWORD;
+    
+    FPDF_SCHHANDLE search = FPDFText_FindStart(textPage, wQuery.data(), flags, 0);
+    
+    env->ReleaseStringChars(query, queryChars);
+    
+    return reinterpret_cast<jlong>(search);
+}
+
+JNI_FUNC(jboolean, PdfiumCore, nativeTextFindNext)(JNI_ARGS, jlong searchHandle) {
+    FPDF_SCHHANDLE search = reinterpret_cast<FPDF_SCHHANDLE>(searchHandle);
+    if (!search) return JNI_FALSE;
+    return FPDFText_FindNext(search) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNI_FUNC(jboolean, PdfiumCore, nativeTextFindPrev)(JNI_ARGS, jlong searchHandle) {
+    FPDF_SCHHANDLE search = reinterpret_cast<FPDF_SCHHANDLE>(searchHandle);
+    if (!search) return JNI_FALSE;
+    return FPDFText_FindPrev(search) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNI_FUNC(jint, PdfiumCore, nativeTextGetSchResultIndex)(JNI_ARGS, jlong searchHandle) {
+    FPDF_SCHHANDLE search = reinterpret_cast<FPDF_SCHHANDLE>(searchHandle);
+    if (!search) return -1;
+    return FPDFText_GetSchResultIndex(search);
+}
+
+JNI_FUNC(jint, PdfiumCore, nativeTextGetSchCount)(JNI_ARGS, jlong searchHandle) {
+    FPDF_SCHHANDLE search = reinterpret_cast<FPDF_SCHHANDLE>(searchHandle);
+    if (!search) return 0;
+    return FPDFText_GetSchCount(search);
+}
+
+JNI_FUNC(void, PdfiumCore, nativeTextFindClose)(JNI_ARGS, jlong searchHandle) {
+    FPDF_SCHHANDLE search = reinterpret_cast<FPDF_SCHHANDLE>(searchHandle);
+    if (search) {
+        FPDFText_FindClose(search);
+    }
+}
+
+// ==========================================
+// METODI JNI PER I RETTANGOLI DI TESTO
+// ==========================================
+
+JNI_FUNC(jint, PdfiumCore, nativeTextCountRects)(JNI_ARGS, jlong textPagePtr, 
+                                                  jint startIndex, jint count) {
+    FPDF_TEXTPAGE textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPagePtr);
+    if (!textPage) return 0;
+    return FPDFText_CountRects(textPage, startIndex, count);
+}
+
+JNI_FUNC(jdoubleArray, PdfiumCore, nativeTextGetRect)(JNI_ARGS, jlong textPagePtr, 
+                                                       jint rectIndex) {
+    FPDF_TEXTPAGE textPage = reinterpret_cast<FPDF_TEXTPAGE>(textPagePtr);
+    if (!textPage) return nullptr;
+    
+    double left, top, right, bottom;
+    if (FPDFText_GetRect(textPage, rectIndex, &left, &top, &right, &bottom)) {
+        jdoubleArray result = env->NewDoubleArray(4);
+        if (result) {
+            jdouble rect[4] = {left, top, right, bottom};
+            env->SetDoubleArrayRegion(result, 0, 4, rect);
+        }
+        return result;
+    }
+    
+    return nullptr;
 }
 
 }//extern C
