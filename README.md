@@ -1,3 +1,5 @@
+Original https://github.com/realmystic/PdfiumAndroid
+
 The purpose is to remove old support libraries so we no longer need to use jetifier.
 
 It will be used with the forked [AndroidPdFViewer](https://github.com/realmystic/AndroidPdfViewer)
