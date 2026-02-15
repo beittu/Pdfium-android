@@ -84,9 +84,15 @@ public class PdfiumCore {
     private native String nativeGetLinkURI(long docPtr, long linkPtr);
 
     private native RectF nativeGetLinkRect(long linkPtr);
+    
+    private native long nativeGetLinkAtPoint(long pagePtr, double x, double y);
+    
+    private native double[] nativeDeviceToPageCoords(long pagePtr, int startX, int startY, int sizeX,
+                                                     int sizeY, int rotate, int deviceX, int deviceY);
 
     private native Point nativePageCoordsToDevice(long pagePtr, int startX, int startY, int sizeX,
                                                   int sizeY, int rotate, double pageX, double pageY);
+
 
 
     /* synchronize native methods */
@@ -406,6 +412,63 @@ public class PdfiumCore {
             }
             return links;
         }
+    }
+
+    /**
+     * Get link at specific point on page in page coordinates.
+     * This method allows to detect which link (if any) is at a given point on the page.
+     * 
+     * @param doc       pdf document
+     * @param pageIndex index of page (must be opened)
+     * @param x         X coordinate in page coordinate system
+     * @param y         Y coordinate in page coordinate system
+     * @return Link object if found at the point, null otherwise
+     */
+    public PdfDocument.Link getLinkAtPoint(PdfDocument doc, int pageIndex, double x, double y) {
+        synchronized (lock) {
+            Long nativePagePtr = doc.mNativePagesPtr.get(pageIndex);
+            if (nativePagePtr == null) {
+                return null;
+            }
+            
+            long linkPtr = nativeGetLinkAtPoint(nativePagePtr, x, y);
+            if (linkPtr == 0) {
+                return null;
+            }
+            
+            Integer index = nativeGetDestPageIndex(doc.mNativeDocPtr, linkPtr);
+            String uri = nativeGetLinkURI(doc.mNativeDocPtr, linkPtr);
+            RectF rect = nativeGetLinkRect(linkPtr);
+            
+            if (rect != null && (index != null || uri != null)) {
+                return new PdfDocument.Link(rect, index, uri);
+            }
+            
+            return null;
+        }
+    }
+
+    /**
+     * Convert device (screen) coordinates to page coordinates.
+     * This is useful for converting tap/click coordinates to page coordinates
+     * for use with getLinkAtPoint.
+     * 
+     * @param doc       pdf document
+     * @param pageIndex index of page
+     * @param startX    left pixel position of the display area in device coordinates
+     * @param startY    top pixel position of the display area in device coordinates
+     * @param sizeX     horizontal size (in pixels) for displaying the page
+     * @param sizeY     vertical size (in pixels) for displaying the page
+     * @param rotate    page orientation: 0 (normal), 1 (rotated 90 degrees clockwise),
+     *                  2 (rotated 180 degrees), 3 (rotated 90 degrees counter-clockwise)
+     * @param deviceX   X value in device coordinates
+     * @param deviceY   Y value in device coordinates
+     * @return array with two elements: [pageX, pageY]
+     */
+    public double[] mapDeviceToPageCoords(PdfDocument doc, int pageIndex, int startX, int startY, 
+                                          int sizeX, int sizeY, int rotate, int deviceX, int deviceY) {
+        long pagePtr = doc.mNativePagesPtr.get(pageIndex);
+        return nativeDeviceToPageCoords(pagePtr, startX, startY, sizeX, sizeY, rotate, deviceX, deviceY);
     }
 
     /**

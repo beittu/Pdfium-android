@@ -6,6 +6,12 @@ com.github.beittu:Pdfium-android:1.0
 
 It will be used with the forked [AndroidPdFViewer](https://github.com/realmystic/AndroidPdfViewer)
 
+## What's new in 1.9.9
+* Add `getLinkAtPoint()` API for link detection at specific page coordinates
+* Add `mapDeviceToPageCoords()` API to convert screen coordinates to page coordinates
+* Improve `nativeGetDestPageIndex` with FPDFLink_GetAction fallback when FPDFLink_GetDest returns null
+* Enhanced link handling for better parity with KotlinPdfium
+
 ## What's new in 1.9.8
 * Migrate to .KTS format for gradle
 * Update Proguard rules to use optimized rules for android
@@ -75,7 +81,16 @@ of links from given page. Links are returned as `List` of type `PdfDocument.Link
 and link bounds in document page coordinates. To map page coordinates to screen coordinates you may use
 `PdfiumCore#mapRectToDevice(...)`. See `PdfiumCore#mapPageCoordsToDevice(...)` for parameters description.
 
-Sample usage:
+### New Link Handling APIs
+**Version 1.9.9** adds enhanced link handling capabilities for better parity with KotlinPdfium:
+
+* `PdfiumCore#getLinkAtPoint(PdfDocument doc, int pageIndex, double x, double y)` - Get link at specific page coordinates (useful for tap/click detection)
+* `PdfiumCore#mapDeviceToPageCoords(...)` - Convert device (screen) coordinates to page coordinates
+* Improved `nativeGetDestPageIndex` with action fallback - now tries FPDFLink_GetAction if FPDFLink_GetDest returns null
+
+These new APIs enable better hit-testing for link detection in PDF viewers.
+
+Sample usage for getting all links:
 ``` java
 PdfiumCore core = ...;
 PdfDocument document = ...;
@@ -92,6 +107,35 @@ for (PdfDocument.Link link : links) {
         } else if (uri != null && !uri.isEmpty()) {
             // open URI using Intent
         }
+    }
+}
+
+```
+
+Sample usage for link detection at tap point:
+``` java
+PdfiumCore core = ...;
+PdfDocument document = ...;
+int pageIndex = 0;
+core.openPage(document, pageIndex);
+
+// User taps at screen coordinates (deviceX, deviceY)
+// Convert to page coordinates first
+double[] pageCoords = core.mapDeviceToPageCoords(document, pageIndex, 
+    startX, startY, sizeX, sizeY, rotation, deviceX, deviceY);
+
+// Check if there's a link at this point
+PdfDocument.Link link = core.getLinkAtPoint(document, pageIndex, 
+    pageCoords[0], pageCoords[1]);
+
+if (link != null) {
+    if (link.getDestPageIdx() != null) {
+        // Navigate to destination page
+        int destPage = link.getDestPageIdx();
+    } else if (link.getUri() != null && !link.getUri().isEmpty()) {
+        // Open external URI
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(link.getUri()));
+        startActivity(intent);
     }
 }
 
