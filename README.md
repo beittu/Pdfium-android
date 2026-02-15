@@ -2,6 +2,8 @@ Original https://github.com/realmystic/PdfiumAndroid
 
 The purpose is to remove old support libraries so we no longer need to use jetifier.
 
+com.github.beittu:Pdfium-android:1.0
+
 It will be used with the forked [AndroidPdFViewer](https://github.com/realmystic/AndroidPdfViewer)
 
 ## What's new in 1.9.8
