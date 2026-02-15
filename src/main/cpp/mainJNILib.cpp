@@ -640,12 +640,25 @@ JNI_FUNC(jlongArray, PdfiumCore, nativeGetPageLinks)(JNI_ARGS, jlong pagePtr) {
 JNI_FUNC(jobject, PdfiumCore, nativeGetDestPageIndex)(JNI_ARGS, jlong docPtr, jlong linkPtr) {
     DocumentFile *doc = reinterpret_cast<DocumentFile*>(docPtr);
     FPDF_LINK link = reinterpret_cast<FPDF_LINK>(linkPtr);
+    
+    // First try to get destination directly
     FPDF_DEST dest = FPDFLink_GetDest(doc->pdfDocument, link);
-    if (dest == NULL) {
-        return NULL;
+    if (dest != NULL) {
+        unsigned long index = FPDFDest_GetDestPageIndex(doc->pdfDocument, dest);
+        return NewInteger(env, (jint) index);
     }
-    unsigned long index = FPDFDest_GetDestPageIndex(doc->pdfDocument, dest);
-    return NewInteger(env, (jint) index);
+    
+    // If no destination, try to get action and then destination from action
+    FPDF_ACTION action = FPDFLink_GetAction(link);
+    if (action != NULL) {
+        dest = FPDFAction_GetDest(doc->pdfDocument, action);
+        if (dest != NULL) {
+            unsigned long index = FPDFDest_GetDestPageIndex(doc->pdfDocument, dest);
+            return NewInteger(env, (jint) index);
+        }
+    }
+    
+    return NULL;
 }
 
 JNI_FUNC(jstring, PdfiumCore, nativeGetLinkURI)(JNI_ARGS, jlong docPtr, jlong linkPtr){
@@ -678,6 +691,12 @@ JNI_FUNC(jobject, PdfiumCore, nativeGetLinkRect)(JNI_ARGS, jlong linkPtr) {
     return env->NewObject(clazz, constructorID, fsRectF.left, fsRectF.top, fsRectF.right, fsRectF.bottom);
 }
 
+JNI_FUNC(jlong, PdfiumCore, nativeGetLinkAtPoint)(JNI_ARGS, jlong pagePtr, jdouble x, jdouble y) {
+    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    FPDF_LINK link = FPDFLink_GetLinkAtPoint(page, x, y);
+    return reinterpret_cast<jlong>(link);
+}
+
 JNI_FUNC(jobject, PdfiumCore, nativePageCoordsToDevice)(JNI_ARGS, jlong pagePtr, jint startX, jint startY, jint sizeX,
                                             jint sizeY, jint rotate, jdouble pageX, jdouble pageY) {
     FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
@@ -688,6 +707,19 @@ JNI_FUNC(jobject, PdfiumCore, nativePageCoordsToDevice)(JNI_ARGS, jlong pagePtr,
     jclass clazz = env->FindClass("android/graphics/Point");
     jmethodID constructorID = env->GetMethodID(clazz, "<init>", "(II)V");
     return env->NewObject(clazz, constructorID, deviceX, deviceY);
+}
+
+JNI_FUNC(jdoubleArray, PdfiumCore, nativeDeviceToPageCoords)(JNI_ARGS, jlong pagePtr, jint startX, jint startY, jint sizeX,
+                                            jint sizeY, jint rotate, jint deviceX, jint deviceY) {
+    FPDF_PAGE page = reinterpret_cast<FPDF_PAGE>(pagePtr);
+    double pageX, pageY;
+
+    FPDF_DeviceToPage(page, startX, startY, sizeX, sizeY, rotate, deviceX, deviceY, &pageX, &pageY);
+
+    jdoubleArray result = env->NewDoubleArray(2);
+    jdouble coords[2] = {pageX, pageY};
+    env->SetDoubleArrayRegion(result, 0, 2, coords);
+    return result;
 }
 
 // ==========================================
