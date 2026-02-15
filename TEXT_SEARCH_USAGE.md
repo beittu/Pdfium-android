@@ -366,9 +366,10 @@ public class PdfPageView extends View {
                 invalidate();
                 
                 // Show a toast or snackbar
+                String selectedText = currentSelection.getText();
                 Toast.makeText(getContext(), 
-                    "Text copied: " + currentSelection.getText().substring(0, 
-                        Math.min(20, currentSelection.getText().length())),
+                    "Text copied: " + selectedText.substring(0, 
+                        Math.min(20, selectedText.length())),
                     Toast.LENGTH_SHORT).show();
             }
         } finally {

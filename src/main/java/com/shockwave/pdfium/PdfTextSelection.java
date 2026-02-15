@@ -68,14 +68,14 @@ public class PdfTextSelection {
         PdfTextSelection that = (PdfTextSelection) o;
         return startIndex == that.startIndex && 
                count == that.count &&
-               text.equals(that.text);
+               (text == null ? that.text == null : text.equals(that.text));
     }
 
     @Override
     public int hashCode() {
         int result = startIndex;
         result = 31 * result + count;
-        result = 31 * result + text.hashCode();
+        result = 31 * result + (text != null ? text.hashCode() : 0);
         return result;
     }
 }
