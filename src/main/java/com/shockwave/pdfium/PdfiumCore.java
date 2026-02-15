@@ -442,4 +442,136 @@ public class PdfiumCore {
                 coords.right, coords.bottom);
         return new RectF(leftTop.x, leftTop.y, rightBottom.x, rightBottom.y);
     }
+
+    // ===============================================
+    // NUOVI METODI PER LA GESTIONE DEL TESTO
+    // ===============================================
+    
+    // Metodi nativi per operazioni su testo
+    private native long nativeLoadTextPage(long docPtr, long pagePtr);
+    private native void nativeCloseTextPage(long textPagePtr);
+    private native int nativeTextCountChars(long textPagePtr);
+    private native String nativeGetText(long textPagePtr, int startIndex, int count);
+    private native void nativeGetCharBox(long textPagePtr, int index, double[] result);
+    private native int nativeGetCharIndexAtPos(long textPagePtr, double x, double y, 
+                                               double xTolerance, double yTolerance);
+    
+    // Metodi nativi per la ricerca
+    private native long nativeTextFindStart(long textPagePtr, String query, 
+                                           boolean matchCase, boolean matchWholeWord);
+    private native boolean nativeTextFindNext(long searchHandle);
+    private native boolean nativeTextFindPrev(long searchHandle);
+    private native int nativeTextGetSchResultIndex(long searchHandle);
+    private native int nativeTextGetSchCount(long searchHandle);
+    private native void nativeTextFindClose(long searchHandle);
+    
+    // Metodi nativi per i rettangoli di testo
+    private native int nativeTextCountRects(long textPagePtr, int startIndex, int count);
+    private native double[] nativeTextGetRect(long textPagePtr, int rectIndex);
+    
+    // Metodi pubblici per operazioni su testo
+    
+    /**
+     * Apre una pagina di testo per un documento PDF.
+     * Ricordati di chiudere la pagina quando hai finito usando {@link #closeTextPage(long)}.
+     * 
+     * @param doc Il documento PDF
+     * @param pageIndex L'indice della pagina (0-based)
+     * @return Un oggetto PdfTextPage
+     */
+    public PdfTextPage openTextPage(PdfDocument doc, int pageIndex) {
+        synchronized (lock) {
+            Long pagePtr = doc.mNativePagesPtr.get(pageIndex);
+            if (pagePtr == null) {
+                pagePtr = openPage(doc, pageIndex);
+            }
+            long textPagePtr = nativeLoadTextPage(doc.mNativeDocPtr, pagePtr);
+            return new PdfTextPage(this, textPagePtr);
+        }
+    }
+    
+    /*package*/ void closeTextPage(long textPagePtr) {
+        synchronized (lock) {
+            nativeCloseTextPage(textPagePtr);
+        }
+    }
+    
+    /*package*/ int getTextCount(long textPagePtr) {
+        synchronized (lock) {
+            return nativeTextCountChars(textPagePtr);
+        }
+    }
+    
+    /*package*/ String getText(long textPagePtr, int startIndex, int count) {
+        synchronized (lock) {
+            String text = nativeGetText(textPagePtr, startIndex, count);
+            return text != null ? text : "";
+        }
+    }
+    
+    /*package*/ double[] getCharBox(long textPagePtr, int index) {
+        synchronized (lock) {
+            double[] result = new double[4];
+            nativeGetCharBox(textPagePtr, index, result);
+            return result;
+        }
+    }
+    
+    /*package*/ int getCharIndexAtPos(long textPagePtr, double x, double y, 
+                                      double xTolerance, double yTolerance) {
+        synchronized (lock) {
+            return nativeGetCharIndexAtPos(textPagePtr, x, y, xTolerance, yTolerance);
+        }
+    }
+    
+    // Metodi per la ricerca
+    
+    /*package*/ long textFindStart(long textPagePtr, String query, 
+                                   boolean matchCase, boolean matchWholeWord) {
+        synchronized (lock) {
+            return nativeTextFindStart(textPagePtr, query, matchCase, matchWholeWord);
+        }
+    }
+    
+    /*package*/ boolean textFindNext(long searchHandle) {
+        synchronized (lock) {
+            return nativeTextFindNext(searchHandle);
+        }
+    }
+    
+    /*package*/ boolean textFindPrev(long searchHandle) {
+        synchronized (lock) {
+            return nativeTextFindPrev(searchHandle);
+        }
+    }
+    
+    /*package*/ int textGetSchResultIndex(long searchHandle) {
+        synchronized (lock) {
+            return nativeTextGetSchResultIndex(searchHandle);
+        }
+    }
+    
+    /*package*/ int textGetSchCount(long searchHandle) {
+        synchronized (lock) {
+            return nativeTextGetSchCount(searchHandle);
+        }
+    }
+    
+    /*package*/ void textFindClose(long searchHandle) {
+        synchronized (lock) {
+            nativeTextFindClose(searchHandle);
+        }
+    }
+    
+    /*package*/ int textCountRects(long textPagePtr, int startIndex, int count) {
+        synchronized (lock) {
+            return nativeTextCountRects(textPagePtr, startIndex, count);
+        }
+    }
+    
+    /*package*/ double[] textGetRect(long textPagePtr, int rectIndex) {
+        synchronized (lock) {
+            return nativeTextGetRect(textPagePtr, rectIndex);
+        }
+    }
 }
